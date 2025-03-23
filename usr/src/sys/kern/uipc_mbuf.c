@@ -480,6 +480,7 @@ m_pullup(n, len)
 	 * otherwise allocate a new mbuf to prepend to the chain.
 	 */
 	/* 
+	 * 功能：将数据移动到连续的内存块中，以便方便地解析数据（如解析协议头部）
 	 * 第一个mbuf没有cluster（M_EXT标志被设置）
 	 * 第一个mbuf有足够的空间容纳len字节，而不需要移动当前数据, (MLEN为正常mbuf中的最大数据量108字节）
 	 * mbuf链中有下一个mbuf
@@ -532,14 +533,18 @@ m_pullup(n, len)
 		else // n中数据没了，则释放n, 并指向下一个mbuf
 			n = m_free(n);
 	} while (len > 0 && n);
+	// 如果数据拉取不完全，释放m
 	if (len > 0) {
 		(void) m_free(m);
 		goto bad;
 	}
+	// 将m和n连接起来，返回n
 	m->m_next = n;
 	return (m);
 bad:
 	m_freem(n);
+	// 埋点：统计失败次数, 可帮助开发者监控系统的运行状态
+	// 例如MPFail的值迅速增加，可能表明系统内存不足或mbuf链存在异常
 	MPFail++;
 	return (0);
 }
