@@ -233,10 +233,12 @@ m_prepend(m, len, how)
 		m_freem(m);
 		return ((struct mbuf *)NULL);
 	}
+	// 如果原始m包含数据头部（M_PKTHDR标志），将其复制到mn中, 并将m中的标志清除
 	if (m->m_flags & M_PKTHDR) {
 		M_COPY_PKTHDR(mn, m);
 		m->m_flags &= ~M_PKTHDR;
 	}
+	// 前插新的mn
 	mn->m_next = m;
 	m = mn;
 	if (len < MHLEN)

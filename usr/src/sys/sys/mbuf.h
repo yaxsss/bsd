@@ -150,6 +150,9 @@ struct mbuf {
  *	MBUFLOCK(code)
  * prevents a section of code from from being interrupted by network
  * drivers.
+ * splimp: 提升中断优先级到网络层（IMP）级别，并返回当前的中断优先级
+ * splx: 恢复中断优先级到 ms 指定的级别
+ * 通过提升中断优先级来保护mbuf操作，确保在多线程或中断上下文不会发生竞争条件
  */
 #define	MBUFLOCK(code) \
 	{ int ms = splimp(); \
@@ -221,6 +224,11 @@ union mcluster {
 	  } \
 	)
 
+/*
+ * 调用MCLALLOC为m->m_ext.ext_buf分配一个簇
+ * m_ext.ext_buf不为空，则分配成功, 设置标记M_EXT，
+ * 将m_data指向分配的簇，设置m_ext.ext_size大小
+ */
 #define	MCLGET(m, how) \
 	{ MCLALLOC((m)->m_ext.ext_buf, (how)); \
 	  if ((m)->m_ext.ext_buf != NULL) { \
@@ -287,6 +295,9 @@ union mcluster {
 /*
  * As above, for mbufs allocated with m_gethdr/MGETHDR
  * or initialized by M_COPY_PKTHDR.
+ * 1. MHLEN-len计算mbuf中的剩余空间
+ * 2. 例如sizeof(long) = 8, ~(7-1)=0x1000,
+ * 3. 剩余空间 & 0x1000就保证了数据起始位置肯定是8字节对齐了
  */
 #define	MH_ALIGN(m, len) \
 	{ (m)->m_data += (MHLEN - (len)) &~ (sizeof(long) - 1); }
@@ -294,6 +305,9 @@ union mcluster {
 /*
  * Compute the amount of space available
  * before the current start of data in an mbuf.
+ * 1. mbuf如果使用了外部缓冲区，返回0（因为外部缓冲区的m_data指针通常指向缓冲区的起始位置，没有前导空间）
+ * 2. 数据如果包含头部，m_data指针与m_pktdat之间的位置就是前导空间
+ * 3. 否则就是m_data-m_data之间的差值就是前导空间
  */
 #define	M_LEADINGSPACE(m) \
 	((m)->m_flags & M_EXT ? /* (m)->m_data - (m)->m_ext.ext_buf */ 0 : \
@@ -303,6 +317,8 @@ union mcluster {
 /*
  * Compute the amount of space available
  * after the end of data in an mbuf.
+ * 1. 如果mbuf使用了外部缓冲区， 尾部剩余空间就是缓冲区结束位置(ext_buf+ext_size)-数据区结束位置（m_data+m_len)
+ * 2. mbuf内部空间，计算内部数据区的结束地址(&(m)->m_dat[MLEN]) - 当前数据区结束地址之间的差值(m_data + m_len)
  */
 #define	M_TRAILINGSPACE(m) \
 	((m)->m_flags & M_EXT ? (m)->m_ext.ext_buf + (m)->m_ext.ext_size - \
